@@ -1,0 +1,34 @@
+{
+  "name": "pumperly-mcp",
+  "version": "0.0.1",
+  "description": "MCP server for Pumperly — query fuel prices, gas stations, route planning, and EV charging via the Model Context Protocol",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GeiserX/pumperly-mcp.git"
+  },
+  "homepage": "https://github.com/GeiserX/pumperly-mcp",
+  "author": "GeiserX",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "pumperly",
+    "fuel-prices",
+    "gas-stations",
+    "route-planning",
+    "ev-charging"
+  ],
+  "bin": {
+    "pumperly-mcp": "run.js"
+  },
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  },
+  "files": [
+    "run.js",
+    "postinstall.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
