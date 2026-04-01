@@ -18,7 +18,7 @@ func RegisterConfig(s *server.MCPServer, c *client.Client) {
 	)
 
 	s.AddResource(res, func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		body, err := c.GetConfig()
+		body, err := c.GetConfig(ctx)
 		if err != nil {
 			return nil, err
 		}

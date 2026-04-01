@@ -52,7 +52,7 @@ func NewFindRouteStations(c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
 			"corridorKm": corridorKm,
 		}
 
-		resp, err := c.FindRouteStations(body)
+		resp, err := c.FindRouteStations(ctx, body)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

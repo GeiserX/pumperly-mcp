@@ -68,7 +68,7 @@ func NewCalculateRoute(c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
 			body["waypoints"] = waypoints
 		}
 
-		resp, err := c.CalculateRoute(body)
+		resp, err := c.CalculateRoute(ctx, body)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

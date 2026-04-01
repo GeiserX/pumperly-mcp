@@ -51,7 +51,7 @@ func NewFindNearestStations(c *client.Client) (mcp.Tool, server.ToolHandlerFunc)
 		radiusKm := optionalFloat(req, "radius_km", 10)
 		limit := optionalFloat(req, "limit", 5)
 
-		resp, err := c.FindNearestStations(lat, lon, fuel, radiusKm, limit)
+		resp, err := c.FindNearestStations(ctx, lat, lon, fuel, radiusKm, limit)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,22 +32,22 @@ func (c *Client) buildURL(path string, q url.Values) string {
 	return u
 }
 
-func (c *Client) doGet(path string, q url.Values) ([]byte, error) {
+func (c *Client) doGet(ctx context.Context, path string, q url.Values) ([]byte, error) {
 	endpoint := c.buildURL(path, q)
-	req, err := http.NewRequest("GET", endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 	return c.do(req)
 }
 
-func (c *Client) doPost(path string, body any) ([]byte, error) {
+func (c *Client) doPost(ctx context.Context, path string, body any) ([]byte, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("marshal body: %w", err)
 	}
 	endpoint := c.buildURL(path, nil)
-	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}
@@ -70,53 +71,53 @@ func (c *Client) do(req *http.Request) ([]byte, error) {
 // ── Resources ────────────────────────────────────────────────────────────────
 
 // GetConfig returns the app configuration (countries, defaults, fuel types).
-func (c *Client) GetConfig() ([]byte, error) {
-	return c.doGet("/api/config", nil)
+func (c *Client) GetConfig(ctx context.Context) ([]byte, error) {
+	return c.doGet(ctx, "/api/config", nil)
 }
 
 // GetStats returns platform statistics (station/price counts per country).
-func (c *Client) GetStats() ([]byte, error) {
-	return c.doGet("/api/stats", nil)
+func (c *Client) GetStats(ctx context.Context) ([]byte, error) {
+	return c.doGet(ctx, "/api/stats", nil)
 }
 
 // GetExchangeRates returns ECB daily exchange rates.
-func (c *Client) GetExchangeRates() ([]byte, error) {
-	return c.doGet("/api/exchange-rates", nil)
+func (c *Client) GetExchangeRates(ctx context.Context) ([]byte, error) {
+	return c.doGet(ctx, "/api/exchange-rates", nil)
 }
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
 // FindNearestStations queries for fuel stations near a coordinate.
-func (c *Client) FindNearestStations(lat, lon float64, fuel string, radiusKm, limit float64) ([]byte, error) {
+func (c *Client) FindNearestStations(ctx context.Context, lat, lon float64, fuel string, radiusKm, limit float64) ([]byte, error) {
 	q := url.Values{}
 	q.Set("lat", fmt.Sprintf("%f", lat))
 	q.Set("lon", fmt.Sprintf("%f", lon))
 	q.Set("fuel", fuel)
 	q.Set("radius_km", fmt.Sprintf("%g", radiusKm))
 	q.Set("limit", fmt.Sprintf("%g", limit))
-	return c.doGet("/api/stations/nearest", q)
+	return c.doGet(ctx, "/api/stations/nearest", q)
 }
 
 // GetStationsInArea queries for fuel stations within a bounding box.
-func (c *Client) GetStationsInArea(bbox, fuel string) ([]byte, error) {
+func (c *Client) GetStationsInArea(ctx context.Context, bbox, fuel string) ([]byte, error) {
 	q := url.Values{}
 	q.Set("bbox", bbox)
 	q.Set("fuel", fuel)
-	return c.doGet("/api/stations", q)
+	return c.doGet(ctx, "/api/stations", q)
 }
 
 // CalculateRoute requests a driving route between origin and destination.
-func (c *Client) CalculateRoute(body map[string]any) ([]byte, error) {
-	return c.doPost("/api/route", body)
+func (c *Client) CalculateRoute(ctx context.Context, body map[string]any) ([]byte, error) {
+	return c.doPost(ctx, "/api/route", body)
 }
 
 // FindRouteStations finds fuel stations along a route corridor.
-func (c *Client) FindRouteStations(body map[string]any) ([]byte, error) {
-	return c.doPost("/api/route-stations", body)
+func (c *Client) FindRouteStations(ctx context.Context, body map[string]any) ([]byte, error) {
+	return c.doPost(ctx, "/api/route-stations", body)
 }
 
 // Geocode searches for a location by name.
-func (c *Client) Geocode(query string, lat, lon *float64) ([]byte, error) {
+func (c *Client) Geocode(ctx context.Context, query string, lat, lon *float64) ([]byte, error) {
 	q := url.Values{}
 	q.Set("q", query)
 	if lat != nil {
@@ -125,5 +126,5 @@ func (c *Client) Geocode(query string, lat, lon *float64) ([]byte, error) {
 	if lon != nil {
 		q.Set("lon", fmt.Sprintf("%f", *lon))
 	}
-	return c.doGet("/api/geocode", q)
+	return c.doGet(ctx, "/api/geocode", q)
 }

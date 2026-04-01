@@ -34,7 +34,7 @@ func NewGetStationsInArea(c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		resp, err := c.GetStationsInArea(bbox, fuel)
+		resp, err := c.GetStationsInArea(ctx, bbox, fuel)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -40,7 +40,7 @@ func NewGeocode(c *client.Client) (mcp.Tool, server.ToolHandlerFunc) {
 			lon = &v
 		}
 
-		resp, err := c.Geocode(query, lat, lon)
+		resp, err := c.Geocode(ctx, query, lat, lon)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
