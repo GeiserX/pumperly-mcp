@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.GeiserX/pumperly-mcp",
+  "description": "MCP server for Pumperly — query real-time fuel prices, find stations, plan routes, and geocode locations",
+  "repository": {
+    "url": "https://github.com/GeiserX/pumperly-mcp",
+    "source": "github"
+  },
+  "version": "0.0.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "pumperly-mcp",
+      "version": "0.0.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "PUMPERLY_URL",
+          "description": "Pumperly API base URL (e.g. https://pumperly.com)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "drumsergio/pumperly-mcp:v0.0.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "PUMPERLY_URL",
+          "description": "Pumperly API base URL (e.g. https://pumperly.com)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

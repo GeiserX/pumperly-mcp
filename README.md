@@ -7,6 +7,9 @@
   <a href="https://github.com/GeiserX/pumperly-mcp/stargazers"><img src="https://img.shields.io/github/stars/GeiserX/pumperly-mcp?style=flat-square&logo=github" alt="GitHub Stars"/></a>
   <a href="https://github.com/GeiserX/pumperly-mcp/blob/main/LICENSE"><img src="https://img.shields.io/github/license/GeiserX/pumperly-mcp?style=flat-square" alt="License"/></a>
 </p>
+<p align="center">
+  <a href="https://glama.ai/mcp/servers/GeiserX/pumperly-mcp"><img src="https://glama.ai/mcp/servers/GeiserX/pumperly-mcp/badges/score.svg" alt="Glama MCP Server" /></a>
+</p>
 
 <p align="center"><strong>A tiny bridge that exposes any Pumperly instance as an MCP server, enabling LLMs to query real-time fuel prices, find stations, plan routes, and geocode locations.</strong></p>
 

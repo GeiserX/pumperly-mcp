@@ -1,5 +1,6 @@
 {
   "name": "pumperly-mcp",
+  "mcpName": "io.github.GeiserX/pumperly-mcp",
   "version": "0.0.1",
   "description": "MCP server for Pumperly — query fuel prices, gas stations, route planning, and EV charging via the Model Context Protocol",
   "license": "GPL-3.0",
