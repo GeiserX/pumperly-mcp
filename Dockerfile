@@ -6,6 +6,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /out/pumperly-mcp ./cmd/server
 
 FROM alpine:3.23
+LABEL io.modelcontextprotocol.server.name="io.github.GeiserX/pumperly-mcp"
 COPY --from=builder /out/pumperly-mcp /usr/local/bin/pumperly-mcp
 EXPOSE 8080
 ENV LISTEN_ADDR=0.0.0.0:8080
