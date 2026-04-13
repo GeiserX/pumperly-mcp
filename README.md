@@ -138,3 +138,12 @@ Pumperly-MCP follows the [Contributor Covenant](http://contributor-covenant.org/
 - [genieacs-mcp](https://github.com/GeiserX/genieacs-mcp) — TR-069 device management
 - [lynxprompt-mcp](https://github.com/GeiserX/lynxprompt-mcp) — AI configuration blueprints
 - [telegram-archive-mcp](https://github.com/GeiserX/telegram-archive-mcp) — Telegram message archive
+
+## Related Projects
+
+| Project | Description |
+|---------|-------------|
+| [Pumperly](https://github.com/GeiserX/Pumperly) | Open-source fuel and EV route planner with real-time prices |
+| [Pumperly-android](https://github.com/GeiserX/Pumperly-android) | Official Android app for Pumperly fuel and EV route planner |
+| [pumperly-ha](https://github.com/GeiserX/pumperly-ha) | Home Assistant custom integration for Pumperly fuel and EV charging prices |
+| [n8n-nodes-pumperly](https://github.com/GeiserX/n8n-nodes-pumperly) | n8n community node for Pumperly fuel and EV charging data |
