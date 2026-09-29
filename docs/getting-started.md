@@ -53,7 +53,7 @@ The server then answers on `http://localhost:8080/mcp`. A client that supports r
 }
 ```
 
-> **Security note:** the HTTP transport has no authentication. It listens on `127.0.0.1:8080` by default; the compose file above publishes it on loopback only. If you need to expose it on a network, put it behind a reverse proxy with authentication.
+> **Security note:** the HTTP transport has no authentication. Outside Docker it listens on `127.0.0.1:8080` by default. The image sets `LISTEN_ADDR=0.0.0.0:8080`, so the container listens on all its interfaces, and the compose file above publishes the port on host loopback only. If you need to expose it on a network, put it behind a reverse proxy with authentication.
 
 To run the image over stdio instead: `docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.1.0`.
 
