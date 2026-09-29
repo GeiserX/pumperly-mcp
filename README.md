@@ -42,7 +42,7 @@ LLMs / Agents can: `initialize` -> `readResource` -> `listTools` -> `callTool` .
 ```yaml
 services:
   pumperly-mcp:
-    image: drumsergio/pumperly-mcp:latest
+    image: drumsergio/pumperly-mcp:v0.1.0
     ports:
       - "127.0.0.1:8080:8080"
     environment:
