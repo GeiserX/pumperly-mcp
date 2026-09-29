@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.svg" alt="Pumperly MCP banner" width="900"/>
+  <img src="https://raw.githubusercontent.com/GeiserX/pumperly-mcp/main/docs/images/banner.svg" alt="Pumperly MCP banner" width="900"/>
 </p>
 
 <h1 align="center">Pumperly-MCP</h1>
