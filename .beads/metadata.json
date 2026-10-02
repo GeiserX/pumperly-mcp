@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "pmcp",
+  "project_id": "2aed2825-6852-4c09-8457-93406d78229c"
+}
