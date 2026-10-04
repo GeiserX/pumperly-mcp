@@ -6,12 +6,12 @@
     "url": "https://github.com/GeiserX/pumperly-mcp",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "pumperly-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": {
         "type": "stdio"
       },
@@ -27,7 +27,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "drumsergio/pumperly-mcp:v0.1.0",
+      "identifier": "drumsergio/pumperly-mcp:v0.1.1",
       "transport": {
         "type": "stdio"
       },
