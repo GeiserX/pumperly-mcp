@@ -52,12 +52,22 @@ function getAssetName(platform, arch) {
 }
 
 // expectedSha256 returns the hash listed for assetName in a goreleaser
-// checksums.txt ("<sha256>  <file>" per line), or throws.
+// checksums.txt ("<sha256>  <file>" per line), or throws. It slices each line
+// instead of using one regex, so a crafted line cannot make it backtrack.
 function expectedSha256(checksumsText, assetName) {
-  for (const line of checksumsText.split(/\r?\n/)) {
-    const m = line.trim().match(/^([0-9a-f]{64})\s+\*?(.+)$/);
-    if (m && m[2] === assetName) {
-      return m[1];
+  for (const raw of checksumsText.split("\n")) {
+    const line = raw.trim();
+    const hash = line.slice(0, 64);
+    let name = line.slice(64);
+    if (!/^[0-9a-f]{64}$/.test(hash) || !/^\s/.test(name)) {
+      continue;
+    }
+    name = name.trimStart();
+    if (name.startsWith("*")) {
+      name = name.slice(1);
+    }
+    if (name === assetName) {
+      return hash;
     }
   }
   throw new Error(`no checksum for ${assetName} in the bundled checksums.txt`);

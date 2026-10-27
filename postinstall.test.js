@@ -20,6 +20,21 @@ test("expectedSha256 picks the exact asset line", () => {
   assert.strictEqual(expectedSha256(text, `pumperly-mcp_${VERSION}_linux_amd64.tar.gz`), B);
 });
 
+test("expectedSha256 accepts CRLF lines and the binary-mode marker", () => {
+  const text = `${A} *other.tar.gz\r\n${B} *pumperly-mcp.tar.gz\r\n`;
+  assert.strictEqual(expectedSha256(text, "pumperly-mcp.tar.gz"), B);
+  assert.throws(() => expectedSha256(`${B}pumperly-mcp.tar.gz\n`, "pumperly-mcp.tar.gz"), /no checksum/);
+});
+
+test("expectedSha256 stays linear on a line of many spaces", () => {
+  // A backtracking regex takes quadratic time on this line (CodeQL js/polynomial-redos).
+  const text = `${A}${" ".repeat(200_000)}x\u2028x\n${B}  pumperly-mcp.tar.gz\n`;
+  const start = process.hrtime.bigint();
+  assert.strictEqual(expectedSha256(text, "pumperly-mcp.tar.gz"), B);
+  const ms = Number(process.hrtime.bigint() - start) / 1e6;
+  assert.ok(ms < 1000, `took ${ms} ms`);
+});
+
 test("expectedSha256 throws when the asset is not listed", () => {
   assert.throws(() => expectedSha256(`${A}  other.tar.gz\n`, "pumperly-mcp.tar.gz"), /no checksum/);
 });
