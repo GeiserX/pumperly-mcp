@@ -12,35 +12,74 @@
   <a href="https://glama.ai/mcp/servers/GeiserX/pumperly-mcp"><img src="https://glama.ai/mcp/servers/GeiserX/pumperly-mcp/badges/score.svg" alt="Glama MCP Server"/></a>
 </p>
 
-A small bridge that exposes any [Pumperly](https://github.com/GeiserX/Pumperly) instance as an MCP server, so an AI agent can query fuel prices, find stations, plan routes and geocode places.
+A small bridge that exposes any [Pumperly](https://github.com/GeiserX/Pumperly) instance as an MCP server, so an AI agent can find the cheapest fuel or charging near a place or along a drive, in about 40 countries, mostly in Europe.
 
 ## Features
 
-- Five tools: `find_nearest_stations`, `get_stations_in_area`, `calculate_route`, `find_route_stations`, `geocode`.
-- Three read-only resources: `pumperly://config`, `pumperly://stats`, `pumperly://exchange-rates`.
-- Two transports: stdio, and HTTP on a single `/mcp` endpoint.
-- An npm package that downloads the release binary for your platform and runs it over stdio.
-- A Docker image for amd64 and arm64.
-- Works with the public instance at pumperly.com or your own: set `PUMPERLY_URL`.
-- No API key: it reads the Pumperly API anonymously.
+- Six read-only tools:
 
-## Quick start
+  | Tool | What it answers |
+  |---|---|
+  | `cheapest_fuel_on_route` | Where to fill up between two places, in one call |
+  | `find_nearest_stations` | Stations near a place name or coordinates, by distance or price |
+  | `get_stations_in_area` | Stations inside a bounding box, cheapest first |
+  | `calculate_route` | Driving distance and time between places, with up to 5 stops |
+  | `find_route_stations` | Stations along a route geometry you already have |
+  | `geocode` | Coordinates for a place name |
 
-Add this to your MCP client's configuration (Claude Desktop, Claude Code, Cursor and others read the `mcpServers` format):
+- Four resources: `pumperly://fuel-types`, `pumperly://config`, `pumperly://stats`, `pumperly://exchange-rates`.
+- Short answers: station lists are sorted, cut to a limit and summarised (min, median and max price), so a search costs about 1 KB of context.
+- MCP 2026-07-28 and every earlier version back to 2024-11-05, on the same binary: new clients use `server/discover`, older ones `initialize`.
+- Two transports: stdio, and streamable HTTP on `/mcp` with a bearer token and origin checks.
+- Works with the public instance at pumperly.com or your own: set `PUMPERLY_URL`. No API key.
+
+Every tool only reads, so there is no read-only switch to set.
+
+## Install
+
+The npm package downloads the release binary for your platform, checks its SHA-256 against the checksums shipped in the package, and runs it over stdio. It needs Node.js 18 or later.
+
+Claude Code:
+
+```sh
+claude mcp add pumperly -- npx -y pumperly-mcp
+```
+
+Claude Desktop (`claude_desktop_config.json`) and Cursor (`~/.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
-    "pumperly": {
-      "command": "npx",
-      "args": ["-y", "pumperly-mcp"],
-      "env": { "PUMPERLY_URL": "https://pumperly.com" }
-    }
+    "pumperly": { "command": "npx", "args": ["-y", "pumperly-mcp"] }
   }
 }
 ```
 
-For the HTTP transport (`/mcp` on port 8080) run the Docker image; see [Getting started](https://github.com/GeiserX/pumperly-mcp/blob/main/docs/getting-started.md).
+VS Code (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "pumperly": { "type": "stdio", "command": "npx", "args": ["-y", "pumperly-mcp"] }
+  }
+}
+```
+
+Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.pumperly]
+command = "npx"
+args = ["-y", "pumperly-mcp"]
+```
+
+Docker, over stdio:
+
+```sh
+docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.1.2
+```
+
+To use your own Pumperly instance, add `PUMPERLY_URL` to the environment (`"env": { "PUMPERLY_URL": "https://..." }` in the JSON configs). For the HTTP transport, see [Getting started](https://github.com/GeiserX/pumperly-mcp/blob/main/docs/getting-started.md).
 
 ## Documentation
 

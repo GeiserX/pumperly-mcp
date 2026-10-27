@@ -1,224 +1,76 @@
 package tools
 
 import (
-	"context"
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"strings"
+	"fmt"
 	"testing"
-
-	"github.com/geiserx/pumperly-mcp/client"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func TestNewFindRouteStations_returns_tool_with_correct_name(t *testing.T) {
-	c := client.New("http://localhost")
-	tool, _ := NewFindRouteStations(c)
-	if tool.Name != "find_route_stations" {
-		t.Errorf("name = %q", tool.Name)
+const routeStationsFixture = `{"type":"FeatureCollection","features":[
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-2.0,40.0]},"properties":{"name":"Mid","brand":"Repsol","address":"A-3 km 100","city":"Tarancón","country":"ES","fuelType":"B7","currency":"EUR","price":1.70,"routeFraction":0.5}},
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.6,40.4]},"properties":{"name":"Start","brand":"Cepsa","address":"A-3 km 5","city":"Madrid","country":"ES","fuelType":"B7","currency":"EUR","price":1.60,"routeFraction":0.02}},
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-0.5,39.5]},"properties":{"name":"End","brand":null,"address":"V-30","city":"Valencia","country":"ES","fuelType":"B7","currency":"EUR","price":1.80,"routeFraction":0.98}}
+]}`
+
+func TestFindRouteStations_forwards_geometry_and_ranks(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"POST /api/route-stations": routeStationsFixture})
+	_, h := NewFindRouteStations(api.client())
+
+	geom := map[string]any{"type": "LineString", "coordinates": []any{[]any{-3.7, 40.4}, []any{-0.4, 39.5}}}
+	res := as[StationList](t, call(t, h, map[string]any{"geometry": geom, "fuel": "B7", "sort_by": "route"}))
+
+	body := api.last(t, "/api/route-stations").Body
+	if body["fuel"] != "B7" || body["corridorKm"] != 5.0 || fmt.Sprint(body["geometry"]) != "map[coordinates:[[-3.7 40.4] [-0.4 39.5]] type:LineString]" {
+		t.Errorf("body = %v", body)
+	}
+	if res.Stations[0].Name != "Start" || res.Stations[2].Name != "End" {
+		t.Errorf("not in route order: %+v", res.Stations)
+	}
+	if res.Stations[1].RouteKm == nil || *res.Stations[1].RouteKm < 100 || *res.Stations[1].RouteKm > 200 {
+		t.Errorf("route_km = %v", res.Stations[1].RouteKm)
 	}
 }
 
-func TestFindRouteStations_handler_sends_geometry_and_fuel(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var m map[string]any
-		json.Unmarshal(body, &m)
-
-		if _, ok := m["geometry"]; !ok {
-			t.Error("missing geometry")
-		}
-		if m["fuel"] != "B7" {
-			t.Errorf("fuel = %v", m["fuel"])
-		}
-		w.Write([]byte(`[{"station":"A"}]`))
+func TestFindRouteStations_accepts_geometry_as_json_text(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"POST /api/route-stations": routeStationsFixture})
+	_, h := NewFindRouteStations(api.client())
+	res := as[StationList](t, call(t, h, map[string]any{
+		"geometry": `{"type":"LineString","coordinates":[[-3.7,40.4],[-0.4,39.5]]}`, "fuel": "B7",
 	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewFindRouteStations(c)
-
-	geom := `{"type":"LineString","coordinates":[[-3.7,40.4],[-0.37,39.47]]}`
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"geometry": geom,
-				"fuel":     "B7",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		text := result.Content[0].(mcp.TextContent).Text
-		t.Fatalf("handler returned error: %s", text)
-	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "station") {
-		t.Errorf("text = %q", text)
+	if res.Stations[0].Name != "Start" {
+		t.Errorf("not sorted by price: %+v", res.Stations[0])
 	}
 }
 
-func TestFindRouteStations_handler_uses_default_corridor(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var m map[string]any
-		json.Unmarshal(body, &m)
-		if corridor, ok := m["corridorKm"].(float64); !ok || corridor != 5 {
-			t.Errorf("corridorKm = %v, want 5", m["corridorKm"])
-		}
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewFindRouteStations(c)
-
-	geom := `{"type":"LineString","coordinates":[[-3.7,40.4],[-0.37,39.47]]}`
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"geometry": geom,
-				"fuel":     "B7",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
+func TestFindRouteStations_rejects_bad_geometry(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"POST /api/route-stations": routeStationsFixture})
+	_, h := NewFindRouteStations(api.client())
+	for name, tc := range map[string]struct {
+		geom any
+		want string
+	}{
+		"missing":       {nil, "missing required parameter: geometry"},
+		"not json":      {"{nope", "GeoJSON LineString object"},
+		"point":         {map[string]any{"type": "Point", "coordinates": []any{1.0, 2.0}}, "GeoJSON LineString object"},
+		"one point":     {map[string]any{"type": "LineString", "coordinates": []any{[]any{1.0, 2.0}}}, "2 to 2000 points"},
+		"lat lon order": {map[string]any{"type": "LineString", "coordinates": []any{[]any{40.0, 100.0}, []any{1.0, 2.0}}}, "longitude first"},
+		"polygon":       {map[string]any{"type": "Polygon", "coordinates": []any{}}, "type must be LineString"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			wantError(t, call(t, h, map[string]any{"geometry": tc.geom, "fuel": "B7"}), tc.want)
+		})
 	}
 }
 
-func TestFindRouteStations_handler_custom_corridor(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var m map[string]any
-		json.Unmarshal(body, &m)
-		if corridor, ok := m["corridorKm"].(float64); !ok || corridor != 15 {
-			t.Errorf("corridorKm = %v, want 15", m["corridorKm"])
-		}
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewFindRouteStations(c)
-
-	geom := `{"type":"LineString","coordinates":[[-3.7,40.4],[-0.37,39.47]]}`
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"geometry":    geom,
-				"fuel":        "B7",
-				"corridor_km": 15.0,
-			},
-		},
+func TestDownsample_keeps_ends_and_limit(t *testing.T) {
+	var pts [][]float64
+	for i := 0; i < 4321; i++ {
+		pts = append(pts, []float64{float64(i), 0})
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	got := downsample(pts, 2000)
+	if len(got) != 2000 || got[0][0] != 0 || got[1999][0] != 4320 {
+		t.Errorf("len %d, first %v, last %v", len(got), got[0], got[len(got)-1])
 	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
-	}
-}
-
-func TestFindRouteStations_handler_error_missing_geometry(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewFindRouteStations(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"fuel": "B7",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing geometry")
-	}
-}
-
-func TestFindRouteStations_handler_error_missing_fuel(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewFindRouteStations(c)
-
-	geom := `{"type":"LineString","coordinates":[[-3.7,40.4]]}`
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"geometry": geom,
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing fuel")
-	}
-}
-
-func TestFindRouteStations_handler_error_invalid_geometry_json(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewFindRouteStations(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"geometry": "not-json",
-				"fuel":     "B7",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for invalid geometry JSON")
-	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "invalid geometry JSON") {
-		t.Errorf("text = %q", text)
-	}
-}
-
-func TestFindRouteStations_handler_error_on_api_failure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewFindRouteStations(c)
-
-	geom := `{"type":"LineString","coordinates":[[-3.7,40.4],[-0.37,39.47]]}`
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"geometry": geom,
-				"fuel":     "B7",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for API failure")
+	if short := downsample(pts[:10], 2000); len(short) != 10 {
+		t.Errorf("short line changed: %d", len(short))
 	}
 }

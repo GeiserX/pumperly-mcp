@@ -15,9 +15,9 @@ npm install -g pumperly-mcp
 pumperly-mcp
 ```
 
-The package downloads the prebuilt Go binary for your platform from [GitHub Releases](https://github.com/GeiserX/pumperly-mcp/releases) and runs it with the stdio transport. It needs Node.js 18 or later.
+The package downloads the prebuilt Go binary for your platform from [GitHub Releases](https://github.com/GeiserX/pumperly-mcp/releases), checks its SHA-256 against the `checksums.txt` shipped inside the package, and runs it with the stdio transport. If npm skipped the install script, the first run downloads it. It needs Node.js 18 or later.
 
-Client configuration (the `mcpServers` format that Claude Desktop, Claude Code, Cursor and others read):
+Client configuration (the `mcpServers` format that Claude Desktop, Cursor and others read; the [README](https://github.com/GeiserX/pumperly-mcp#install) has Claude Code, VS Code and Codex):
 
 ```json
 {
@@ -36,26 +36,31 @@ Client configuration (the `mcpServers` format that Claude Desktop, Claude Code, 
 ```yaml
 services:
   pumperly-mcp:
-    image: drumsergio/pumperly-mcp:v0.1.0
+    image: drumsergio/pumperly-mcp:v0.1.2
     ports:
       - "127.0.0.1:8080:8080"
     environment:
+      - TRANSPORT=http
       - PUMPERLY_URL=https://pumperly.com
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}
 ```
 
-The server then answers on `http://localhost:8080/mcp`. A client that supports remote servers connects with:
+The image listens on `0.0.0.0:8080` inside the container, so it needs a token: generate one with `openssl rand -hex 32` and put it in `.env` as `MCP_AUTH_TOKEN`. From the release after v0.1.2 the server refuses to start without it; v0.1.2 itself has no HTTP authentication, so use a later tag for HTTP. The compose file above also publishes the port on host loopback only. The server then answers on `http://localhost:8080/mcp`. A client that supports remote servers connects with:
 
 ```json
 {
   "mcpServers": {
-    "pumperly": { "url": "http://localhost:8080/mcp" }
+    "pumperly": {
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Authorization": "Bearer <your token>" }
+    }
   }
 }
 ```
 
-> **Security note:** the HTTP transport has no authentication. Outside Docker it listens on `127.0.0.1:8080` by default. The image sets `LISTEN_ADDR=0.0.0.0:8080`, so the container listens on all its interfaces, and the compose file above publishes the port on host loopback only. If you need to expose it on a network, put it behind a reverse proxy with authentication.
+A browser app on another origin also needs its origin in `MCP_ALLOWED_ORIGINS`. To expose the server beyond the host, put it behind a reverse proxy with TLS and keep the token.
 
-To run the image over stdio instead: `docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.1.0`.
+The image runs over stdio by default: `docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.1.2` (images before the next release default to HTTP, hence the explicit variable).
 
 ## Build from source
 

@@ -1,217 +1,107 @@
 package tools
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
-
-	"github.com/geiserx/pumperly-mcp/client"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func TestNewFindNearestStations_returns_tool_with_correct_name(t *testing.T) {
-	c := client.New("http://localhost")
-	tool, _ := NewFindNearestStations(c)
-	if tool.Name != "find_nearest_stations" {
-		t.Errorf("name = %q", tool.Name)
-	}
-}
+func TestFindNearestStations_sends_exact_query_and_defaults(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/stations/nearest": nearestFixture})
+	_, h := NewFindNearestStations(api.client())
 
-func TestFindNearestStations_handler_returns_stations(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("fuel") != "B7" {
-			t.Errorf("fuel = %q", q.Get("fuel"))
+	res := as[StationList](t, call(t, h, map[string]any{"lat": 40.4168, "lon": -3.7038, "fuel": "B7"}))
+
+	q := api.last(t, "/api/stations/nearest").Query
+	for k, want := range map[string]string{"lat": "40.4168", "lon": "-3.7038", "fuel": "B7", "radius_km": "10", "limit": "5"} {
+		if q[k] != want {
+			t.Errorf("%s = %q, want %q", k, q[k], want)
 		}
-		w.Write([]byte(`[{"name":"Station A"}]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewFindNearestStations(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"lat":  40.4,
-				"lon":  -3.7,
-				"fuel": "B7",
-			},
-		},
 	}
-
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if res.SortBy != "distance" || res.Unit != "L" || res.Found != 4 || res.Returned != 4 {
+		t.Errorf("list = %+v", res)
 	}
-	if result.IsError {
-		t.Fatalf("handler returned error result")
+	if res.Stations[0].Name != "No Price" || *res.Stations[0].DistanceKm != 0.5 {
+		t.Errorf("not sorted by distance: %+v", res.Stations[0])
 	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "Station A") {
-		t.Errorf("text = %q", text)
+	if res.Center == nil || res.Center.Lat != 40.4168 {
+		t.Errorf("center = %+v", res.Center)
 	}
 }
 
-func TestFindNearestStations_handler_uses_default_radius_and_limit(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("radius_km") != "10" {
-			t.Errorf("radius_km = %q, want 10", q.Get("radius_km"))
-		}
-		if q.Get("limit") != "5" {
-			t.Errorf("limit = %q, want 5", q.Get("limit"))
-		}
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
+func TestFindNearestStations_sort_by_price_asks_for_50_and_returns_the_cheapest(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/stations/nearest": nearestFixture})
+	_, h := NewFindNearestStations(api.client())
 
-	c := client.New(srv.URL)
-	_, handler := NewFindNearestStations(c)
+	res := as[StationList](t, call(t, h, map[string]any{"lat": 40.4, "lon": -3.7, "fuel": "B7", "sort_by": "price", "limit": 2}))
 
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"lat":  40.4,
-				"lon":  -3.7,
-				"fuel": "B7",
-			},
-		},
+	if got := api.last(t, "/api/stations/nearest").Query["limit"]; got != "50" {
+		t.Errorf("upstream limit = %q, want 50", got)
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if res.Returned != 2 || res.Found != 4 {
+		t.Fatalf("returned %d of %d", res.Returned, res.Found)
 	}
-	if result.IsError {
-		t.Fatalf("handler returned error result")
+	if res.Stations[0].Name != "Ballenoil" || res.Stations[1].Name != "Blanca Madrid" {
+		t.Errorf("order = %s, %s", res.Stations[0].Name, res.Stations[1].Name)
+	}
+	if len(res.Prices) != 1 || res.Prices[0].Min != 1.659 || res.Prices[0].Max != 1.995 || res.Prices[0].Count != 3 {
+		t.Errorf("prices = %+v", res.Prices)
 	}
 }
 
-func TestFindNearestStations_handler_custom_radius_and_limit(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("radius_km") != "25" {
-			t.Errorf("radius_km = %q, want 25", q.Get("radius_km"))
-		}
-		if q.Get("limit") != "20" {
-			t.Errorf("limit = %q, want 20", q.Get("limit"))
-		}
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
+func TestFindNearestStations_geocodes_near(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{
+		"GET /api/geocode":          geocodeFixture,
+		"GET /api/stations/nearest": nearestFixture,
+	})
+	_, h := NewFindNearestStations(api.client())
 
-	c := client.New(srv.URL)
-	_, handler := NewFindNearestStations(c)
+	res := as[StationList](t, call(t, h, map[string]any{"near": "Atocha, Madrid", "fuel": "B7"}))
 
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"lat":       40.4,
-				"lon":       -3.7,
-				"fuel":      "B7",
-				"radius_km": 25.0,
-				"limit":     20.0,
-			},
-		},
+	if got := api.last(t, "/api/geocode").Query["q"]; got != "Atocha, Madrid" {
+		t.Errorf("geocode q = %q", got)
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	q := api.last(t, "/api/stations/nearest").Query
+	if q["lat"] != "40.406975" || q["lon"] != "-3.688582" {
+		t.Errorf("searched at %s,%s, want the geocoded point", q["lat"], q["lon"])
 	}
-	if result.IsError {
-		t.Fatalf("handler returned error result")
+	if res.Center.Name != "Atocha" {
+		t.Errorf("center = %+v", res.Center)
 	}
 }
 
-func TestFindNearestStations_handler_error_missing_lat(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewFindNearestStations(c)
+func TestFindNearestStations_rejects_bad_input_before_calling_the_api(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/stations/nearest": nearestFixture})
+	_, h := NewFindNearestStations(api.client())
 
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"lon":  -3.7,
-				"fuel": "B7",
-			},
-		},
+	for name, tc := range map[string]struct {
+		args map[string]any
+		want string
+	}{
+		"no point":            {map[string]any{"fuel": "B7"}, "give lat and lon"},
+		"lat without lon":     {map[string]any{"lat": 40.0, "fuel": "B7"}, "both lat and lon"},
+		"lat out of range":    {map[string]any{"lat": 140.0, "lon": 1.0, "fuel": "B7"}, "latitude must be between"},
+		"E85 is not a code":   {map[string]any{"lat": 40.0, "lon": -3.0, "fuel": "E85"}, "unknown fuel"},
+		"radius too big":      {map[string]any{"lat": 40.0, "lon": -3.0, "fuel": "B7", "radius_km": 500.0}, "radius_km must be between"},
+		"radius not a number": {map[string]any{"lat": 40.0, "lon": -3.0, "fuel": "B7", "radius_km": "far"}, "radius_km must be a number"},
+		"limit fraction":      {map[string]any{"lat": 40.0, "lon": -3.0, "fuel": "B7", "limit": 2.5}, "whole number"},
+		"bad sort":            {map[string]any{"lat": 40.0, "lon": -3.0, "fuel": "B7", "sort_by": "name"}, "sort_by must be one of"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			wantError(t, call(t, h, tc.args), tc.want)
+		})
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing lat")
+	if n := len(api.requests()); n != 0 {
+		t.Errorf("%d upstream requests for invalid input", n)
 	}
 }
 
-func TestFindNearestStations_handler_error_missing_lon(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewFindNearestStations(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"lat":  40.4,
-				"fuel": "B7",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing lon")
-	}
+func TestFindNearestStations_api_error_is_a_short_tool_error(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/stations/nearest": "!"})
+	_, h := NewFindNearestStations(api.client())
+	wantError(t, call(t, h, map[string]any{"lat": 40.0, "lon": -3.0, "fuel": "B7"}), "HTTP 400): Invalid parameters (fuel: Invalid option)")
 }
 
-func TestFindNearestStations_handler_error_missing_fuel(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewFindNearestStations(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"lat": 40.4,
-				"lon": -3.7,
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing fuel")
-	}
-}
-
-func TestFindNearestStations_handler_error_on_api_failure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("boom"))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewFindNearestStations(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"lat":  40.4,
-				"lon":  -3.7,
-				"fuel": "B7",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected protocol error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for API failure")
-	}
+func TestFindNearestStations_rejects_a_non_geojson_answer(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/stations/nearest": `[{"name":"x"}]`})
+	_, h := NewFindNearestStations(api.client())
+	wantError(t, call(t, h, map[string]any{"lat": 40.0, "lon": -3.0, "fuel": "B7"}), "not a station list")
 }

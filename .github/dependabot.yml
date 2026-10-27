@@ -4,15 +4,14 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Majors are not ignored: the MCP SDK ships protocol revisions as majors
+    # (mark3labs/mcp-go v1.0.0 brought 2026-07-28), and the old ignore rule
+    # kept this server on v0.x after v1.0.0 shipped.
     groups:
       minor-and-patch:
         update-types:
           - minor
           - patch
-    ignore:
-      - dependency-name: '*'
-        update-types:
-          - version-update:semver-major
   - package-ecosystem: npm
     directory: /
     schedule:

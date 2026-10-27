@@ -13,7 +13,7 @@ func RegisterExchangeRates(s *server.MCPServer, c *client.Client) {
 	res := mcp.NewResource(
 		"pumperly://exchange-rates",
 		"ECB exchange rates",
-		mcp.WithResourceDescription("Daily exchange rates from the European Central Bank"),
+		mcp.WithResourceDescription("Daily European Central Bank exchange rates against EUR (base EUR), to compare prices quoted in different currencies."),
 		mcp.WithMIMEType("application/json"),
 	)
 

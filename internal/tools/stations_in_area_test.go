@@ -1,123 +1,53 @@
 package tools
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/geiserx/pumperly-mcp/client"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func TestNewGetStationsInArea_returns_tool_with_correct_name(t *testing.T) {
-	c := client.New("http://localhost")
-	tool, _ := NewGetStationsInArea(c)
-	if tool.Name != "get_stations_in_area" {
-		t.Errorf("name = %q", tool.Name)
-	}
-}
+func TestGetStationsInArea_sorts_by_price_and_limits(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/stations": nearestFixture})
+	_, h := NewGetStationsInArea(api.client())
 
-func TestGetStationsInArea_handler_returns_stations(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("bbox") != "-4,39,-3,41" {
-			t.Errorf("bbox = %q", q.Get("bbox"))
+	res := as[StationList](t, call(t, h, map[string]any{"bbox": " -3.75, 40.38,-3.65,40.45", "fuel": "B7", "limit": 2}))
+
+	q := api.last(t, "/api/stations").Query
+	if q["bbox"] != "-3.75,40.38,-3.65,40.45" || q["fuel"] != "B7" {
+		t.Errorf("query = %v", q)
+	}
+	if res.SortBy != "price" || res.Found != 4 || res.Returned != 2 || res.Stations[0].Price == nil || *res.Stations[0].Price != 1.659 {
+		t.Errorf("list = %+v", res)
+	}
+	for _, s := range res.Stations {
+		if s.DistanceKm == nil {
+			t.Errorf("%s has no distance from the box centre", s.Name)
 		}
-		if q.Get("fuel") != "E5" {
-			t.Errorf("fuel = %q", q.Get("fuel"))
+	}
+}
+
+func TestGetStationsInArea_unpriced_stations_sort_last(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/stations": nearestFixture})
+	_, h := NewGetStationsInArea(api.client())
+	res := as[StationList](t, call(t, h, map[string]any{"bbox": "-3.75,40.38,-3.65,40.45", "fuel": "B7"}))
+	if last := res.Stations[len(res.Stations)-1]; last.Name != "No Price" || last.Price != nil || last.Currency != "" {
+		t.Errorf("last = %+v", last)
+	}
+}
+
+func TestParseBBox(t *testing.T) {
+	for in, want := range map[string]string{
+		"-3.75,40.38,-3.65,40.45": "",
+		"-3.65,40.38,-3.75,40.45": "min < max",
+		"1,2,3":                   "four numbers",
+		"a,2,3,4":                 "not a number",
+		"-200,40,-3,41":           "longitude must be between",
+	} {
+		_, err := parseBBox(in)
+		switch {
+		case want == "" && err != nil:
+			t.Errorf("parseBBox(%q) = %v", in, err)
+		case want != "" && (err == nil || !strings.Contains(err.Error(), want)):
+			t.Errorf("parseBBox(%q) = %v, want %q", in, err, want)
 		}
-		w.Write([]byte(`[{"id":1}]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewGetStationsInArea(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"bbox": "-4,39,-3,41",
-				"fuel": "E5",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
-	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, `"id"`) {
-		t.Errorf("text = %q", text)
-	}
-}
-
-func TestGetStationsInArea_handler_error_missing_bbox(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewGetStationsInArea(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"fuel": "E5",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing bbox")
-	}
-}
-
-func TestGetStationsInArea_handler_error_missing_fuel(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewGetStationsInArea(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"bbox": "-4,39,-3,41",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing fuel")
-	}
-}
-
-func TestGetStationsInArea_handler_error_on_api_failure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewGetStationsInArea(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"bbox": "-4,39,-3,41",
-				"fuel": "E5",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for API failure")
 	}
 }
