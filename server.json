@@ -1,10 +1,22 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.GeiserX/pumperly-mcp",
-  "description": "MCP server for Pumperly — query fuel prices, find stations, and plan routes",
+  "title": "Pumperly",
+  "description": "Cheapest fuel and EV charging near a place or along a drive, in about 40 countries",
+  "websiteUrl": "https://github.com/GeiserX/pumperly-mcp",
+  "icons": [
+    {
+      "src": "https://pumperly.com/icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
   "repository": {
     "url": "https://github.com/GeiserX/pumperly-mcp",
-    "source": "github"
+    "source": "github",
+    "id": "1198347284"
   },
   "version": "0.1.2",
   "packages": [
@@ -18,10 +30,11 @@
       "environmentVariables": [
         {
           "name": "PUMPERLY_URL",
-          "description": "Pumperly API base URL (e.g. https://pumperly.com)",
+          "description": "Pumperly instance URL (default https://pumperly.com); set it to use your own instance",
           "isRequired": false,
           "format": "string",
-          "isSecret": false
+          "isSecret": false,
+          "default": "https://pumperly.com"
         }
       ]
     },
@@ -34,10 +47,11 @@
       "environmentVariables": [
         {
           "name": "PUMPERLY_URL",
-          "description": "Pumperly API base URL (e.g. https://pumperly.com)",
+          "description": "Pumperly instance URL (default https://pumperly.com); set it to use your own instance",
           "isRequired": false,
           "format": "string",
-          "isSecret": false
+          "isSecret": false,
+          "default": "https://pumperly.com"
         }
       ]
     }
