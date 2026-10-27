@@ -18,12 +18,12 @@
     "source": "github",
     "id": "1198347284"
   },
-  "version": "0.1.2",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "pumperly-mcp",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
@@ -40,7 +40,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "drumsergio/pumperly-mcp:v0.1.2",
+      "identifier": "drumsergio/pumperly-mcp:v0.2.0",
       "transport": {
         "type": "stdio"
       },

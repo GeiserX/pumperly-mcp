@@ -76,7 +76,7 @@ args = ["-y", "pumperly-mcp"]
 Docker, over stdio:
 
 ```sh
-docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.1.2
+docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.2.0
 ```
 
 To use your own Pumperly instance, add `PUMPERLY_URL` to the environment (`"env": { "PUMPERLY_URL": "https://..." }` in the JSON configs). For the HTTP transport, see [Getting started](https://github.com/GeiserX/pumperly-mcp/blob/main/docs/getting-started.md).
