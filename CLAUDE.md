@@ -28,16 +28,16 @@ node --test
 ```
 
 ## Architecture
-- `cmd/server/` — Server entrypoint (config, stdio or HTTP, graceful shutdown)
-- `internal/mcpserver/` — Server construction, instructions, hardened HTTP handler (bearer, origin, body cap)
-- `internal/resources/` — MCP resource handlers (fuel types, config, stats, exchange rates)
-- `internal/tools/` — MCP tool implementations (stations, routes, cheapest on route, geocode)
-- `client/` — Go client library for Pumperly API (`pumperly.go` + tests)
-- `config/` — Configuration handling
-- `docs/` — Documentation and images
-- `glama.json` — Glama MCP directory metadata
-- `server.json` — MCP server manifest
-- `version/` — Version file
+- `cmd/server/`: Server entrypoint (config, stdio or HTTP, graceful shutdown)
+- `internal/mcpserver/`: Server construction, instructions, hardened HTTP handler (bearer, origin, body cap)
+- `internal/resources/`: MCP resource handlers (fuel types, config, stats, exchange rates)
+- `internal/tools/`: MCP tool implementations (stations, routes, cheapest on route, geocode)
+- `client/`: Go client library for Pumperly API (`pumperly.go` + tests)
+- `config/`: Configuration handling
+- `docs/`: Documentation and images
+- `glama.json`: Glama MCP directory metadata
+- `server.json`: MCP server manifest
+- `version/`: Version file
 
 ## Key Rules
 - Never hardcode API URLs; configure via `PUMPERLY_URL` environment variable
