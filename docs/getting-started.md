@@ -36,7 +36,7 @@ Client configuration (the `mcpServers` format that Claude Desktop, Cursor and ot
 ```yaml
 services:
   pumperly-mcp:
-    image: drumsergio/pumperly-mcp:v0.1.2
+    image: drumsergio/pumperly-mcp:v0.2.0
     ports:
       - "127.0.0.1:8080:8080"
     environment:
@@ -45,7 +45,7 @@ services:
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}
 ```
 
-The image listens on `0.0.0.0:8080` inside the container, so it needs a token: generate one with `openssl rand -hex 32` and put it in `.env` as `MCP_AUTH_TOKEN`. From the release after v0.1.2 the server refuses to start without it; v0.1.2 itself has no HTTP authentication, so use a later tag for HTTP. The compose file above also publishes the port on host loopback only. The server then answers on `http://localhost:8080/mcp`. A client that supports remote servers connects with:
+The image listens on `0.0.0.0:8080` inside the container, so it needs a token: generate one with `openssl rand -hex 32` and put it in `.env` as `MCP_AUTH_TOKEN`. From v0.2.0 the server refuses to start without it; v0.1.2 and earlier have no HTTP authentication, so use v0.2.0 or later for HTTP. The compose file above also publishes the port on host loopback only. The server then answers on `http://localhost:8080/mcp`. A client that supports remote servers connects with:
 
 ```json
 {
@@ -60,7 +60,7 @@ The image listens on `0.0.0.0:8080` inside the container, so it needs a token: g
 
 A browser app on another origin also needs its origin in `MCP_ALLOWED_ORIGINS`. To expose the server beyond the host, put it behind a reverse proxy with TLS and keep the token.
 
-The image runs over stdio by default: `docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.1.2` (images before the next release default to HTTP, hence the explicit variable).
+The image runs over stdio by default: `docker run -i --rm -e TRANSPORT=stdio drumsergio/pumperly-mcp:v0.2.0` (images before v0.2.0 default to HTTP, hence the explicit variable).
 
 ## Build from source
 
