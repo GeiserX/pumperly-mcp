@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net/http"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/geiserx/pumperly-mcp/client"
 	"github.com/geiserx/pumperly-mcp/config"
@@ -47,18 +46,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = httpSrv.Shutdown(shutdownCtx)
-	}()
+	ln, err := net.Listen("tcp", srvCfg.ListenAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
 	auth := "no auth (loopback only)"
 	if srvCfg.AuthToken != "" {
 		auth = "bearer token required"
 	}
 	log.Printf("Pumperly MCP bridge listening on http://%s/mcp, %s", srvCfg.ListenAddr, auth)
-	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := mcpserver.Serve(ctx, httpSrv, ln, mcpserver.ShutdownGrace); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+	log.Println("Pumperly MCP bridge stopped")
 }

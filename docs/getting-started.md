@@ -45,7 +45,7 @@ services:
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}
 ```
 
-The image listens on `0.0.0.0:8080` inside the container, so it needs a token: generate one with `openssl rand -hex 32`, put it in `.env` as `MCP_AUTH_TOKEN`, and the server refuses to start without it. The compose file above also publishes the port on host loopback only. The server then answers on `http://localhost:8080/mcp`. A client that supports remote servers connects with:
+The image listens on `0.0.0.0:8080` inside the container, so it needs a token: generate one with `openssl rand -hex 32` and put it in `.env` as `MCP_AUTH_TOKEN`. From the release after v0.1.2 the server refuses to start without it; v0.1.2 itself has no HTTP authentication, so use a later tag for HTTP. The compose file above also publishes the port on host loopback only. The server then answers on `http://localhost:8080/mcp`. A client that supports remote servers connects with:
 
 ```json
 {

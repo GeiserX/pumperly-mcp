@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
@@ -129,4 +130,25 @@ func limitBody(next http.Handler, max int64) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// ShutdownGrace is how long Serve lets in-flight requests finish after ctx
+// is cancelled.
+const ShutdownGrace = 10 * time.Second
+
+// Serve runs srv on ln until ctx is cancelled, then stops accepting
+// connections and waits up to grace for in-flight requests before it
+// returns, so a SIGTERM does not cut off a running tool call.
+func Serve(ctx context.Context, srv *http.Server, ln net.Listener, grace time.Duration) error {
+	drained := make(chan error, 1)
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), grace)
+		defer cancel()
+		drained <- srv.Shutdown(shutdownCtx)
+	}()
+	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return <-drained
 }
