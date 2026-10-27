@@ -13,7 +13,7 @@ func RegisterConfig(s *server.MCPServer, c *client.Client) {
 	res := mcp.NewResource(
 		"pumperly://config",
 		"App configuration",
-		mcp.WithResourceDescription("Countries, defaults, and fuel types supported by Pumperly"),
+		mcp.WithResourceDescription("Instance settings: default country and fuel, map centre and zoom, and the enabled countries. Fuel codes are in pumperly://fuel-types."),
 		mcp.WithMIMEType("application/json"),
 	)
 

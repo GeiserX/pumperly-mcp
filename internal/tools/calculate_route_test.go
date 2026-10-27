@@ -1,278 +1,89 @@
 package tools
 
 import (
-	"context"
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
+	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/geiserx/pumperly-mcp/client"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func TestNewCalculateRoute_returns_tool_with_correct_name(t *testing.T) {
-	c := client.New("http://localhost")
-	tool, _ := NewCalculateRoute(c)
-	if tool.Name != "calculate_route" {
-		t.Errorf("name = %q", tool.Name)
-	}
-}
+const routeFixture = `{"routes":[{"geometry":{"type":"LineString","coordinates":[[-3.7038,40.4168],[-2.0,40.0],[-0.3763,39.4699]]},"distance":358.916,"duration":11683.052,"bbox":[-3.7038,39.4699,-0.3763,40.4168],"durations":[0,5000,11683]}]}`
 
-func TestCalculateRoute_handler_sends_origin_and_destination(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var m map[string]any
-		json.Unmarshal(body, &m)
+func TestCalculateRoute_posts_lon_lat_order_and_summarises(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"POST /api/route": routeFixture})
+	_, h := NewCalculateRoute(api.client())
 
-		if _, ok := m["origin"]; !ok {
-			t.Error("missing origin")
-		}
-		if _, ok := m["destination"]; !ok {
-			t.Error("missing destination")
-		}
-		w.Write([]byte(`{"distance_km":350}`))
+	res := as[RouteResult](t, call(t, h, map[string]any{
+		"origin_lat": 40.4168, "origin_lon": -3.7038,
+		"dest_lat": 39.4699, "dest_lon": -0.3763,
+		"waypoints": []any{[]any{-1.13, 40.34}},
 	}))
-	defer srv.Close()
 
-	c := client.New(srv.URL)
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"origin_lat": 40.4,
-				"dest_lon":   -0.37,
-				"dest_lat":   39.47,
-			},
-		},
+	body := api.last(t, "/api/route").Body
+	if got := fmt.Sprint(body["origin"], body["destination"], body["waypoints"]); got != "[-3.7038 40.4168] [-0.3763 39.4699] [[-1.13 40.34]]" {
+		t.Errorf("body = %s", got)
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
-	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "distance_km") {
-		t.Errorf("text = %q", text)
+	r := res.Routes[0]
+	if r.DistanceKm != 358.9 || r.DurationMin != 195 || r.Points != 3 || r.Geometry != nil {
+		t.Errorf("route = %+v", r)
 	}
 }
 
-func TestCalculateRoute_handler_with_waypoints(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var m map[string]any
-		json.Unmarshal(body, &m)
-		if _, ok := m["waypoints"]; !ok {
-			t.Error("missing waypoints")
-		}
-		w.Write([]byte(`{"ok":true}`))
+func TestCalculateRoute_includes_geometry_on_request(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"POST /api/route": routeFixture})
+	_, h := NewCalculateRoute(api.client())
+	res := as[RouteResult](t, call(t, h, map[string]any{
+		"origin": "40.4168,-3.7038", "destination": "39.4699, -0.3763", "include_geometry": true,
 	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"origin_lat": 40.4,
-				"dest_lon":   -0.37,
-				"dest_lat":   39.47,
-				"waypoints":  `[[-2.0, 39.0], [-1.0, 38.5]]`,
-			},
-		},
+	if g := res.Routes[0].Geometry; g == nil || g.Type != "LineString" || len(g.Coordinates) != 3 {
+		t.Errorf("geometry = %+v", g)
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if body := api.last(t, "/api/route").Body; fmt.Sprint(body["origin"]) != "[-3.7038 40.4168]" {
+		t.Errorf("\"lat,lon\" text was not turned into [lon, lat]: %v", body["origin"])
 	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
+	if _, ok := api.last(t, "/api/route").Body["waypoints"]; ok {
+		t.Error("empty waypoints sent")
 	}
 }
 
-func TestCalculateRoute_handler_with_invalid_waypoints_json(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"origin_lat": 40.4,
-				"dest_lon":   -0.37,
-				"dest_lat":   39.47,
-				"waypoints":  "not-json",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for invalid waypoints JSON")
-	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "invalid waypoints JSON") {
-		t.Errorf("text = %q", text)
+func TestCalculateRoute_geocodes_place_names(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/geocode": geocodeFixture, "POST /api/route": routeFixture})
+	_, h := NewCalculateRoute(api.client())
+	res := as[RouteResult](t, call(t, h, map[string]any{"origin": "Atocha", "dest_lat": 39.47, "dest_lon": -0.38}))
+	if res.Origin.Name != "Atocha" || fmt.Sprint(api.last(t, "/api/route").Body["origin"]) != "[-3.688582 40.406975]" {
+		t.Errorf("origin = %+v", res.Origin)
 	}
 }
 
-func TestCalculateRoute_handler_with_empty_waypoints_string(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var m map[string]any
-		json.Unmarshal(body, &m)
-		if _, ok := m["waypoints"]; ok {
-			t.Error("waypoints should not be set for empty string")
-		}
-		w.Write([]byte(`{"ok":true}`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"origin_lat": 40.4,
-				"dest_lon":   -0.37,
-				"dest_lat":   39.47,
-				"waypoints":  "",
-			},
-		},
+func TestCalculateRoute_rejects_bad_input(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"POST /api/route": routeFixture})
+	_, h := NewCalculateRoute(api.client())
+	six := []any{}
+	for i := 0; i < 6; i++ {
+		six = append(six, []any{-3.0, 40.0})
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for name, tc := range map[string]struct {
+		args map[string]any
+		want string
+	}{
+		"no origin":         {map[string]any{"dest_lat": 39.0, "dest_lon": -0.3}, "give origin"},
+		"half origin":       {map[string]any{"origin_lat": 40.0, "dest_lat": 39.0, "dest_lon": -0.3}, "both origin_lat and origin_lon"},
+		"six waypoints":     {map[string]any{"origin": "40,-3", "destination": "39,-0.3", "waypoints": six}, "at most 5 waypoints"},
+		"lat,lon waypoint":  {map[string]any{"origin": "40,-3", "destination": "39,-0.3", "waypoints": []any{[]any{40.0, 120.0}}}, "longitude first"},
+		"waypoint not pair": {map[string]any{"origin": "40,-3", "destination": "39,-0.3", "waypoints": []any{[]any{1.0}}}, "[lon, lat] pair"},
+		"bad lat,lon text":  {map[string]any{"origin": "95,-3", "destination": "39,-0.3"}, "latitude must be between"},
+	} {
+		t.Run(name, func(t *testing.T) { wantError(t, call(t, h, tc.args), tc.want) })
 	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
+	if n := len(api.requests()); n != 0 {
+		t.Errorf("%d upstream requests for invalid input", n)
 	}
 }
 
-func TestCalculateRoute_handler_error_missing_origin_lon(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lat": 40.4,
-				"dest_lon":   -0.37,
-				"dest_lat":   39.47,
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error")
-	}
-}
-
-func TestCalculateRoute_handler_error_missing_origin_lat(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"dest_lon":   -0.37,
-				"dest_lat":   39.47,
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error")
-	}
-}
-
-func TestCalculateRoute_handler_error_missing_dest_lon(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"origin_lat": 40.4,
-				"dest_lat":   39.47,
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error")
-	}
-}
-
-func TestCalculateRoute_handler_error_missing_dest_lat(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"origin_lat": 40.4,
-				"dest_lon":   -0.37,
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error")
-	}
-}
-
-func TestCalculateRoute_handler_error_on_api_failure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewCalculateRoute(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"origin_lon": -3.7,
-				"origin_lat": 40.4,
-				"dest_lon":   -0.37,
-				"dest_lat":   39.47,
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for API failure")
+func TestCalculateRoute_api_error_is_reported(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{})
+	_, h := NewCalculateRoute(api.client())
+	res := call(t, h, map[string]any{"origin": "40,-3", "destination": "39,-0.3"})
+	if !res.IsError || !strings.Contains(text(t, res), "HTTP 404") {
+		t.Errorf("result = %s", text(t, res))
 	}
 }

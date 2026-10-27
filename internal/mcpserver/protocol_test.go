@@ -22,7 +22,12 @@ type stdioPeer struct {
 
 func newStdioPeer(t *testing.T) *stdioPeer {
 	t.Helper()
-	s := New(client.New("http://127.0.0.1:1"))
+	return newStdioPeerWith(t, client.New("http://127.0.0.1:1"))
+}
+
+func newStdioPeerWith(t *testing.T, c *client.Client) *stdioPeer {
+	t.Helper()
+	s := New(c)
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
 	ctx, cancel := context.WithCancel(context.Background())

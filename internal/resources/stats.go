@@ -13,7 +13,7 @@ func RegisterStats(s *server.MCPServer, c *client.Client) {
 	res := mcp.NewResource(
 		"pumperly://stats",
 		"Platform statistics",
-		mcp.WithResourceDescription("Station and price counts per country"),
+		mcp.WithResourceDescription("Station and price counts per covered country (about 40) with the time of each country's last price update."),
 		mcp.WithMIMEType("application/json"),
 	)
 

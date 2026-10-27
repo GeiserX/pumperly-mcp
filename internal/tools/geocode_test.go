@@ -1,194 +1,58 @@
 package tools
 
-import (
-	"context"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
+import "testing"
 
-	"github.com/geiserx/pumperly-mcp/client"
-	"github.com/mark3labs/mcp-go/mcp"
-)
+func TestGeocode_returns_places_lat_lon(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/geocode": geocodeFixture})
+	_, h := NewGeocode(api.client())
 
-func TestNewGeocode_returns_tool_with_correct_name(t *testing.T) {
-	c := client.New("http://localhost")
-	tool, _ := NewGeocode(c)
-	if tool.Name != "geocode" {
-		t.Errorf("name = %q", tool.Name)
+	res := as[GeocodeResult](t, call(t, h, map[string]any{"query": " Atocha ", "lat": 40.4, "lon": -3.7, "limit": 1}))
+
+	q := api.last(t, "/api/geocode").Query
+	if q["q"] != "Atocha" || q["lat"] != "40.4" || q["lon"] != "-3.7" {
+		t.Errorf("query = %v", q)
+	}
+	if len(res.Results) != 1 {
+		t.Fatalf("results = %+v", res.Results)
+	}
+	p := res.Results[0]
+	if p.Lat != 40.406975 || p.Lon != -3.688582 || p.City != "Madrid" || p.State != "Comunidad de Madrid" {
+		t.Errorf("place = %+v", p)
 	}
 }
 
-func TestGeocode_handler_returns_results(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("q") != "Madrid" {
-			t.Errorf("q = %q", q.Get("q"))
-		}
-		w.Write([]byte(`[{"name":"Madrid","lat":40.4,"lon":-3.7}]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewGeocode(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"query": "Madrid",
-			},
-		},
+func TestGeocode_null_fields_are_omitted(t *testing.T) {
+	api := newFakeAPI(t, map[string]string{"GET /api/geocode": geocodeFixture})
+	_, h := NewGeocode(api.client())
+	res := as[GeocodeResult](t, call(t, h, map[string]any{"query": "Atocha"}))
+	if len(res.Results) != 2 || res.Results[1].State != "" {
+		t.Errorf("results = %+v", res.Results)
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
-	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "Madrid") {
-		t.Errorf("text = %q", text)
+	if _, ok := api.last(t, "/api/geocode").Query["lat"]; ok {
+		t.Error("lat sent without a bias point")
 	}
 }
 
-func TestGeocode_handler_with_lat_lon_bias(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("lat") == "" {
-			t.Error("expected lat bias param")
-		}
-		if q.Get("lon") == "" {
-			t.Error("expected lon bias param")
-		}
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewGeocode(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"query": "Calle Mayor",
-				"lat":   40.4,
-				"lon":   -3.7,
-			},
-		},
+func TestGeocode_rejects_bad_input(t *testing.T) {
+	api := newFakeAPI(t, nil)
+	_, h := NewGeocode(api.client())
+	long := make([]rune, 201)
+	for i := range long {
+		long[i] = 'a'
 	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for name, tc := range map[string]struct {
+		args map[string]any
+		want string
+	}{
+		"no query":    {map[string]any{}, "query"},
+		"blank query": {map[string]any{"query": "  "}, "1 to 200 characters"},
+		"long query":  {map[string]any{"query": string(long)}, "1 to 200 characters"},
+		"lat only":    {map[string]any{"query": "x", "lat": 1.0}, "both lat and lon"},
+		"limit 0":     {map[string]any{"query": "x", "limit": 0}, "limit must be between"},
+	} {
+		t.Run(name, func(t *testing.T) { wantError(t, call(t, h, tc.args), tc.want) })
 	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
-	}
-}
-
-func TestGeocode_handler_without_lat_lon_bias(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("lat") != "" {
-			t.Error("lat should be absent")
-		}
-		if q.Get("lon") != "" {
-			t.Error("lon should be absent")
-		}
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewGeocode(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"query": "Barcelona",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
-	}
-}
-
-func TestGeocode_handler_error_missing_query(t *testing.T) {
-	c := client.New("http://localhost")
-	_, handler := NewGeocode(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for missing query")
-	}
-}
-
-func TestGeocode_handler_error_on_api_failure(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewGeocode(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"query": "Madrid",
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Fatal("expected tool error for API failure")
-	}
-}
-
-func TestGeocode_handler_with_only_lat_bias(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if q.Get("lat") == "" {
-			t.Error("expected lat")
-		}
-		// lon should not be set since it was not a float64
-		w.Write([]byte(`[]`))
-	}))
-	defer srv.Close()
-
-	c := client.New(srv.URL)
-	_, handler := NewGeocode(c)
-
-	req := mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: map[string]any{
-				"query": "Test",
-				"lat":   40.4,
-				// lon intentionally absent
-			},
-		},
-	}
-	result, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("handler returned error result")
+	if n := len(api.requests()); n != 0 {
+		t.Errorf("%d upstream requests for invalid input", n)
 	}
 }
