@@ -8,8 +8,7 @@ import (
 
 	"github.com/geiserx/pumperly-mcp/client"
 	"github.com/geiserx/pumperly-mcp/config"
-	"github.com/geiserx/pumperly-mcp/internal/resources"
-	"github.com/geiserx/pumperly-mcp/internal/tools"
+	"github.com/geiserx/pumperly-mcp/internal/mcpserver"
 	"github.com/geiserx/pumperly-mcp/version"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -21,40 +20,7 @@ func main() {
 	cfg := config.LoadPumperlyConfig()
 	c := client.New(cfg.BaseURL)
 
-	// Create MCP server
-	s := server.NewMCPServer(
-		"Pumperly MCP Bridge",
-		version.Version,
-		server.WithToolCapabilities(true),
-		server.WithRecovery(),
-	)
-
-	// ── Resources ────────────────────────────────────────────────────────
-	resources.RegisterConfig(s, c)
-	resources.RegisterStats(s, c)
-	resources.RegisterExchangeRates(s, c)
-
-	// ── Tools ────────────────────────────────────────────────────────────
-
-	// TOOL: find_nearest_stations
-	tool, handler := tools.NewFindNearestStations(c)
-	s.AddTool(tool, handler)
-
-	// TOOL: get_stations_in_area
-	tool, handler = tools.NewGetStationsInArea(c)
-	s.AddTool(tool, handler)
-
-	// TOOL: calculate_route
-	tool, handler = tools.NewCalculateRoute(c)
-	s.AddTool(tool, handler)
-
-	// TOOL: find_route_stations
-	tool, handler = tools.NewFindRouteStations(c)
-	s.AddTool(tool, handler)
-
-	// TOOL: geocode
-	tool, handler = tools.NewGeocode(c)
-	s.AddTool(tool, handler)
+	s := mcpserver.New(c)
 
 	// ── Transport ────────────────────────────────────────────────────────
 	transport := strings.ToLower(os.Getenv("TRANSPORT"))
