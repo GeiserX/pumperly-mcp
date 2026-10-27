@@ -24,6 +24,8 @@ go.work.sum
 dist/
 bin/
 node_modules/
+# written into the npm package by release.yml at publish time
+/checksums.txt
 # the binary from `go build ./cmd/server`; anchored so cmd/server/ stays tracked
 /server
 /pumperly-mcp

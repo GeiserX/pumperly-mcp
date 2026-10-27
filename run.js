@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 "use strict";
 
-const { execFileSync } = require("child_process");
-const path = require("path");
+const { spawnSync } = require("child_process");
 const fs = require("fs");
+const { install, BIN_PATH } = require("./postinstall.js");
 
-const BIN_NAME = process.platform === "win32" ? "pumperly-mcp.exe" : "pumperly-mcp";
-const BIN_PATH = path.join(__dirname, "bin", BIN_NAME);
+async function main() {
+  // npm 12, pnpm and bun skip install scripts by default, so the binary may
+  // not be there yet: fetch and verify it now. Logs go to stderr.
+  if (!fs.existsSync(BIN_PATH)) {
+    await install();
+  }
+  const env = Object.assign({}, process.env, { TRANSPORT: "stdio" });
+  const res = spawnSync(BIN_PATH, process.argv.slice(2), { env, stdio: "inherit" });
+  if (res.error) {
+    throw res.error;
+  }
+  process.exit(res.status === null ? 1 : res.status);
+}
 
-if (!fs.existsSync(BIN_PATH)) {
-  console.error("pumperly-mcp binary not found. Run: npm run postinstall");
+main().catch((err) => {
+  process.stderr.write(`pumperly-mcp: ${err.message}\n`);
   process.exit(1);
-}
-
-const env = Object.assign({}, process.env, { TRANSPORT: "stdio" });
-
-try {
-  execFileSync(BIN_PATH, [], { env, stdio: "inherit" });
-} catch (err) {
-  process.exit(err.status || 1);
-}
+});

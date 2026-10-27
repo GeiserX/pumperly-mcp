@@ -37,10 +37,10 @@ notarize:
 
 archives:
   - id: dist
-    builds: [bin]
+    ids: [bin]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: 'checksums.txt'
@@ -65,6 +65,8 @@ dockers:
       - .goreleaser.yaml
     build_flag_templates:
       - "--platform=linux/amd64"
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--build-arg=COMMIT={{ .ShortCommit }}"
   # ------------- arm64 -------------
   - image_templates:
       - "drumsergio/pumperly-mcp:{{ .Tag }}-arm64"
@@ -84,6 +86,8 @@ dockers:
       - .goreleaser.yaml
     build_flag_templates:
       - "--platform=linux/arm64"
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--build-arg=COMMIT={{ .ShortCommit }}"
 
 docker_manifests:
   # stitch the per-arch images into a combined tag = multi-arch
@@ -97,11 +101,16 @@ docker_manifests:
       - 'drumsergio/pumperly-mcp:latest-arm64'
 
 snapshot:
-  name_template: "snapshot-{{ .ShortCommit }}"
+  version_template: "snapshot-{{ .ShortCommit }}"
 
 changelog:
+  # Entries start with the commit SHA, so the groups match past it.
   groups:
     - title: "Features"
-      regexp: '^feat'
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
     - title: "Fixes"
-      regexp: '^fix'
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: "Other changes"
+      order: 999

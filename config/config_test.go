@@ -54,3 +54,43 @@ func TestGetEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestPumperlyConfig_Validate(t *testing.T) {
+	for url, ok := range map[string]bool{
+		"https://pumperly.com":  true,
+		"http://localhost:3000": true,
+		"pumperly.com":          false,
+		"ftp://pumperly.com":    false,
+		"https://":              false,
+	} {
+		err := PumperlyConfig{BaseURL: url}.Validate()
+		if (err == nil) != ok {
+			t.Errorf("Validate(%q) = %v, want ok=%v", url, err, ok)
+		}
+	}
+}
+
+func TestLoadServerConfig(t *testing.T) {
+	t.Setenv("TRANSPORT", "STDIO")
+	t.Setenv("LISTEN_ADDR", "")
+	t.Setenv("MCP_AUTH_TOKEN", " s3cret ")
+	t.Setenv("MCP_ALLOWED_ORIGINS", "https://a.example, ,https://b.example")
+	cfg := LoadServerConfig()
+	if cfg.Transport != "stdio" {
+		t.Errorf("Transport = %q", cfg.Transport)
+	}
+	if cfg.ListenAddr != "127.0.0.1:8080" {
+		t.Errorf("ListenAddr = %q", cfg.ListenAddr)
+	}
+	if cfg.AuthToken != "s3cret" {
+		t.Errorf("AuthToken = %q", cfg.AuthToken)
+	}
+	if len(cfg.AllowedOrigins) != 2 || cfg.AllowedOrigins[1] != "https://b.example" {
+		t.Errorf("AllowedOrigins = %q", cfg.AllowedOrigins)
+	}
+
+	t.Setenv("TRANSPORT", "")
+	if got := LoadServerConfig().Transport; got != "http" {
+		t.Errorf("default Transport = %q, want http", got)
+	}
+}

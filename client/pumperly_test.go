@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -428,5 +429,123 @@ func TestGetExchangeRates_returns_error_on_server_error(t *testing.T) {
 	_, err := c.GetExchangeRates(context.Background())
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+// ── Hardening ────────────────────────────────────────────────────────────────
+
+func TestDo_does_not_relay_raw_error_bodies(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte("<html>internal-proxy-10.0.0.7 stack trace</html>"))
+	}))
+	defer srv.Close()
+
+	_, err := New(srv.URL).doGet(context.Background(), "/api/stats", nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "internal-proxy") || strings.Contains(err.Error(), "<html>") {
+		t.Errorf("error relays the raw body: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("error = %q, want the status", err.Error())
+	}
+}
+
+func TestDo_summarises_validation_errors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"Invalid parameters","details":[{"code":"invalid_value","path":["fuel"],"message":"Invalid option"}]}`))
+	}))
+	defer srv.Close()
+
+	_, err := New(srv.URL).doGet(context.Background(), "/api/stations", nil)
+	want := "Pumperly API error (HTTP 400): Invalid parameters (fuel: Invalid option)"
+	if err == nil || err.Error() != want {
+		t.Errorf("error = %v, want %q", err, want)
+	}
+}
+
+func TestDo_reports_retry_after_on_429(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "17")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":"Too many requests"}`))
+	}))
+	defer srv.Close()
+
+	_, err := New(srv.URL).doPost(context.Background(), "/api/route", map[string]any{})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.RetryAfter != 17 {
+		t.Fatalf("error = %v, want APIError with RetryAfter 17", err)
+	}
+	if !strings.Contains(err.Error(), "retry after 17 s") {
+		t.Errorf("error = %q", err.Error())
+	}
+}
+
+func TestDo_refuses_oversized_responses(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(make([]byte, MaxResponseBytes+1))
+	}))
+	defer srv.Close()
+
+	_, err := New(srv.URL).doGet(context.Background(), "/api/stations", nil)
+	if !errors.Is(err, ErrResponseTooLarge) {
+		t.Errorf("error = %v, want ErrResponseTooLarge", err)
+	}
+}
+
+func TestDo_accepts_a_response_at_the_cap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(make([]byte, MaxResponseBytes))
+	}))
+	defer srv.Close()
+
+	b, err := New(srv.URL).doGet(context.Background(), "/api/stations", nil)
+	if err != nil || len(b) != MaxResponseBytes {
+		t.Errorf("len = %d, err = %v", len(b), err)
+	}
+}
+
+func TestDo_sends_a_user_agent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ua := r.Header.Get("User-Agent"); !strings.HasPrefix(ua, "pumperly-mcp/") {
+			t.Errorf("User-Agent = %q", ua)
+		}
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL).GetConfig(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDo_transport_errors_hide_the_instance_address(t *testing.T) {
+	_, err := New("http://127.0.0.1:1").doGet(context.Background(), "/api/stats", nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "127.0.0.1") || strings.Contains(err.Error(), "/api/stats") {
+		t.Errorf("error leaks the address: %q", err.Error())
+	}
+}
+
+func TestFindNearestStations_formats_numbers_exactly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		for k, want := range map[string]string{"lat": "40.4168", "lon": "-3.7038", "radius_km": "2.5", "limit": "7"} {
+			if got := q.Get(k); got != want {
+				t.Errorf("%s = %q, want %q", k, got, want)
+			}
+		}
+		w.Write([]byte(`{"type":"FeatureCollection","features":[]}`))
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL).FindNearestStations(context.Background(), 40.4168, -3.7038, "B7", 2.5, 7); err != nil {
+		t.Fatal(err)
 	}
 }
