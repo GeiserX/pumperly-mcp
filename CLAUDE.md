@@ -4,7 +4,7 @@
 MCP (Model Context Protocol) server that exposes any Pumperly instance to LLMs, enabling real-time fuel price queries, station search, route planning, and geocoding via JSON-RPC over HTTP or stdio transport.
 
 ## Tech Stack
-- Go 1.25 (toolchain go1.27.3), mcp-go v1.4 (MCP 2026-07-28 plus legacy initialize)
+- Go 1.25 (toolchain go1.27.4), mcp-go v1.4 (MCP 2026-07-28 plus legacy initialize)
 - MCP protocol (JSON-RPC)
 - Docker (multi-arch)
 - npm package (stdio transport via `npx pumperly-mcp`)
